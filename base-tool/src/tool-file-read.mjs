@@ -48,7 +48,7 @@ const messages = [
 ];
 
 let response = await modelWithTools.invoke(messages)
-
+ console.log(response);
 messages.push(response)
 
 while (response.tool_calls && response.tool_calls.length > 0) {
