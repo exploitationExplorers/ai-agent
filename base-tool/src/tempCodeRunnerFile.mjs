@@ -1,4 +1,14 @@
-const arr = [['server', [{a:1}]]]
+import { ChatOpenAI } from '@langchain/openai';
+import dotenv from 'dotenv'
 
-const [serverName, resources] = arr;
-console.log(serverName);
+dotenv.config();
+const model = new ChatOpenAI({
+    modelName: process.env.MODEL_NAME || "qwen-coder-turbo",
+    apiKey: process.env.OPENAI_API_KEY,
+    configuration: {
+        baseURL: process.env.OPENAI_BASE_URL,
+    },
+});
+
+const response = await model.invoke("介绍下自己");
+console.log(response.content);
