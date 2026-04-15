@@ -1,0 +1,88 @@
+<mxfile host="app.diagrams.net" modified="2026-04-14T00:00:00.000Z" agent="cursor-codex" version="24.7.17" editor="draw.io">
+  <diagram id="mcp-test-flow" name="mcp-test 执行流程">
+    <mxGraphModel dx="1420" dy="820" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1920" pageHeight="1080" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="start" value="启动脚本&#10;mcp-test.mjs" style="ellipse;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="70" y="360" width="140" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="initModel" value="初始化 ChatOpenAI&#10;(qwen-plus)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="250" y="360" width="190" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="initMcp" value="初始化 MultiServerMCPClient&#10;注册 amap + chrome-devtools" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="480" y="350" width="260" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="bindTools" value="getTools() + bindTools()&#10;模型具备 tool_calls 能力" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="780" y="355" width="250" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="initState" value="初始化 state&#10;messages=[HumanMessage(query)]&#10;done=false, final=null" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="345" width="280" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="loopCheck" value="for 循环&#10;i &lt; maxIterations ?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="1410" y="360" width="170" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="invokeChain" value="agentStepChain.invoke(state)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="1640" y="360" width="220" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="llmStep" value="Step1: llmChain&#10;生成 response" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="1910" y="360" width="200" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="hasToolCalls" value="response 是否有&#10;tool_calls?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="2160" y="360" width="180" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="noTools" value="分支A（无工具）&#10;messages += response&#10;done=true&#10;final=response.content" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="2410" y="250" width="250" height="120" as="geometry"/>
+        </mxCell>
+        <mxCell id="returnFinal" value="返回最终答案&#10;return final" style="ellipse;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="2720" y="275" width="150" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="withTools" value="分支B（有工具）&#10;messages += response&#10;打印工具调用日志" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="2410" y="430" width="250" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="toolExec" value="toolExecutor&#10;遍历 tool_calls&#10;invoke(tool.args)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="2720" y="425" width="190" height="110" as="geometry"/>
+        </mxCell>
+        <mxCell id="toolMsg" value="封装 ToolMessage[]&#10;messages += toolMessages&#10;done=false" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="2960" y="425" width="230" height="110" as="geometry"/>
+        </mxCell>
+        <mxCell id="backLoop" value="回到下一轮" style="ellipse;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="3240" y="445" width="120" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="fallback" value="超出最大轮次&#10;返回最后一条消息内容" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="1640" y="560" width="230" height="80" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e1" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="start" target="initModel"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e2" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="initModel" target="initMcp"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e3" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="initMcp" target="bindTools"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e4" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="bindTools" target="initState"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e5" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="initState" target="loopCheck"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e6" value="是" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="loopCheck" target="invokeChain"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e7" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="invokeChain" target="llmStep"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e8" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="llmStep" target="hasToolCalls"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e9" value="否" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="hasToolCalls" target="noTools"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e10" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="noTools" target="returnFinal"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e11" value="是" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="hasToolCalls" target="withTools"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e12" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="withTools" target="toolExec"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e13" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="toolExec" target="toolMsg"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e14" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="toolMsg" target="backLoop"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e15" value="继续下一轮" style="endArrow=block;html=1;rounded=0;dashed=1;" edge="1" parent="1" source="backLoop" target="loopCheck">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="3360" y="560"/>
+              <mxPoint x="1495" y="560"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e16" value="否" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="loopCheck" target="fallback">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1495" y="600"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
