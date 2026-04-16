@@ -34,6 +34,7 @@ export class AiService {
   }
 
   async *streamChain(query: string): AsyncGenerator<string> {
+    console.log('streamChain', query);
     const stream = await this.chain.stream({ query });
     for await (const chunk of stream) {
       yield chunk;
