@@ -29,7 +29,15 @@ export default tseslint.config(
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-floating-promises': 'warn',
       '@typescript-eslint/no-unsafe-argument': 'warn',
-      "prettier/prettier": ["error", { endOfLine: "auto" }],
+      'prettier/prettier': ['error', { endOfLine: 'auto' }],
+    },
+  },
+  // recommendedTypeChecked 已默认开启 no-unsafe-call；对 class-validator 装饰器工厂，
+  // 类型感知分析常把 callee 推成 error type，写 "error" 不会消除误报，需在 DTO 上关闭。
+  {
+    files: ['**/dto/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-unsafe-call': 'off',
     },
   },
 );
