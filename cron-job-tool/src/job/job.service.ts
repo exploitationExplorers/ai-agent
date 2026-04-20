@@ -147,9 +147,13 @@ export class JobService implements OnApplicationBootstrap {
       const ref = setInterval(() => {
         void (async () => {
           this.logger.log(`run job ${job.id}, ${job.instruction}`);
-          await this.entityManager.update(Job, { id: job.id }, {
-            lastRun: new Date(),
-          });
+          await this.entityManager.update(
+            Job,
+            { id: job.id },
+            {
+              lastRun: new Date(),
+            },
+          );
         })();
       }, job.everyMs);
 
@@ -169,10 +173,14 @@ export class JobService implements OnApplicationBootstrap {
       const ref = setTimeout(() => {
         void (async () => {
           this.logger.log(`run job ${job.id}, ${job.instruction}`);
-          await this.entityManager.update(Job, { id: job.id }, {
-            lastRun: new Date(),
-            isEnabled: false, // at 类型只执行一次：执行完自动停用
-          });
+          await this.entityManager.update(
+            Job,
+            { id: job.id },
+            {
+              lastRun: new Date(),
+              isEnabled: false, // at 类型只执行一次：执行完自动停用
+            },
+          );
           try {
             this.schedulerRegistry.deleteTimeout(job.id);
           } catch {
@@ -217,7 +225,11 @@ export class JobService implements OnApplicationBootstrap {
     const cronExpr = job.cron ?? '';
     return new CronJob(cronExpr, async () => {
       this.logger.log(`run job ${job.id}, ${job.instruction}`);
-      await this.entityManager.update(Job, { id: job.id }, { lastRun: new Date() });
+      await this.entityManager.update(
+        Job,
+        { id: job.id },
+        { lastRun: new Date() },
+      );
     });
   }
 }
