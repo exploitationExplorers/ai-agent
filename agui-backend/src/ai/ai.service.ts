@@ -16,7 +16,7 @@ export class AiService {
   ) {
     this.agent = createAgent({
       model: this.model,
-      //tools: [this.webSearchTool],
+      tools: [this.webSearchTool],
       systemPrompt: '你是 AI 助手',
     });
   }
