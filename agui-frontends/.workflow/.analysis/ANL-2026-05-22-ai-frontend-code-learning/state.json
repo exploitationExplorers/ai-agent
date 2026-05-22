@@ -1,0 +1,24 @@
+{
+  "session_id": "ANL-2026-05-22-ai-frontend-code-learning",
+  "topic": "帮我深度分析这个 AI 前端项目的代码，用于学习：项目结构、运行入口、核心模块、AI 交互链路、状态管理、UI 组件组织、关键文件阅读路线；只做代码分析和学习导览，不修改代码",
+  "depth": "Deep Dive",
+  "dimensions": ["architecture", "implementation"],
+  "perspectives": ["technical implementation", "architecture design", "learning guide"],
+  "focus_areas": ["architecture entry", "AI chain", "state UI", "reading route"],
+  "current_round": 1,
+  "current_phase": "completed",
+  "confidence": {
+    "dimensions": { "architecture": 0.9, "implementation": 0.9 },
+    "overall": 0.9,
+    "weakest": null,
+    "history": []
+  },
+  "quality": {
+    "pressure_pass_done": false,
+    "challenge_modes_used": [],
+    "stall_counter": 0,
+    "last_findings_count": 0,
+    "readiness_gate_passed": false,
+    "residual_risks": []
+  }
+}
