@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Multi-Agent Supervisor 可视化 · multi-agent-supervisor.mjs</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --surface: #1a2332;
+      --border: #2d3a4f;
+      --text: #e7ecf3;
+      --muted: #8b9cb3;
+      --accent: #3b82f6;
+      --supervisor: #f59e0b;
+      --weather: #06b6d4;
+      --trivia: #a78bfa;
+      --tool: #22c55e;
+      --human: #f472b6;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    header {
+      padding: 2rem 1.5rem 1rem;
+      max-width: 1100px;
+      margin: 0 auto;
+      border-bottom: 1px solid var(--border);
+    }
+    header h1 { margin: 0 0 0.5rem; font-size: 1.5rem; font-weight: 600; }
+    header p { margin: 0; color: var(--muted); font-size: 0.95rem; }
+    main { max-width: 1100px; margin: 0 auto; padding: 1.5rem; }
+    section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 1.25rem;
+    }
+    section h2 {
+      margin: 0 0 1rem;
+      font-size: 1.1rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    section h2 .badge {
+      font-size: 0.7rem;
+      font-weight: 500;
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+      background: var(--border);
+      color: var(--muted);
+    }
+    .mermaid-wrap {
+      background: #0d1117;
+      border-radius: 8px;
+      padding: 1rem;
+      overflow-x: auto;
+    }
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem 1.25rem;
+      margin-top: 1rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+    .legend span { display: flex; align-items: center; gap: 0.35rem; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    @media (max-width: 720px) { .grid-2 { grid-template-columns: 1fr; } }
+    .card {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      background: rgba(0,0,0,0.2);
+    }
+    .card h3 { margin: 0 0 0.5rem; font-size: 0.95rem; }
+    .card p, .card ul { margin: 0; font-size: 0.88rem; color: var(--muted); }
+    .card ul { padding-left: 1.2rem; }
+    .card.weather { border-left: 3px solid var(--weather); }
+    .card.trivia { border-left: 3px solid var(--trivia); }
+    .card.supervisor { border-left: 3px solid var(--supervisor); }
+    code, pre {
+      font-family: "Cascadia Code", "Consolas", monospace;
+      font-size: 0.82rem;
+    }
+    pre {
+      margin: 0;
+      padding: 1rem;
+      background: #0d1117;
+      border-radius: 8px;
+      overflow-x: auto;
+      border: 1px solid var(--border);
+    }
+    .stepper { display: flex; flex-direction: column; gap: 0; }
+    .step {
+      display: grid;
+      grid-template-columns: 2.5rem 1fr;
+      gap: 0 1rem;
+      padding: 0.75rem 0;
+      border-bottom: 1px dashed var(--border);
+      opacity: 0.35;
+      transition: opacity 0.3s, background 0.3s;
+    }
+    .step:last-child { border-bottom: none; }
+    .step.active { opacity: 1; background: rgba(59, 130, 246, 0.08); margin: 0 -0.5rem; padding-left: 0.5rem; padding-right: 0.5rem; border-radius: 8px; }
+    .step.done { opacity: 0.75; }
+    .step-num {
+      width: 2rem;
+      height: 2rem;
+      border-radius: 50%;
+      background: var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+    .step.active .step-num { background: var(--accent); color: #fff; }
+    .step.done .step-num { background: var(--tool); color: #fff; }
+    .step-body strong { color: var(--text); }
+    .step-body { font-size: 0.9rem; color: var(--muted); }
+    .controls {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+    button {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+    button:hover { filter: brightness(1.1); }
+    button.secondary {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    .path-bar {
+      font-family: monospace;
+      font-size: 0.85rem;
+      padding: 0.75rem 1rem;
+      background: #0d1117;
+      border-radius: 8px;
+      margin-top: 0.75rem;
+      word-break: break-all;
+      color: var(--weather);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+    }
+    th, td {
+      text-align: left;
+      padding: 0.5rem 0.75rem;
+      border-bottom: 1px solid var(--border);
+    }
+    th { color: var(--muted); font-weight: 500; }
+    .tag {
+      display: inline-block;
+      padding: 0.1rem 0.4rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 500;
+    }
+    .tag.model { background: #1e3a5f; color: #93c5fd; }
+    .tag.tool { background: #14532d; color: #86efac; }
+    .tag.agent { background: #312e81; color: #c4b5fd; }
+    footer {
+      text-align: center;
+      padding: 2rem;
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+    a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Multi-Agent Supervisor 架构说明</h1>
+    <p>对应源码：<code>langgraph-test/src/multi-agent-supervisor.mjs</code> · 在浏览器中打开本文件即可，无需启动 Node</p>
+  </header>
+
+  <main>
+    <section>
+      <h2>一句话概括 <span class="badge">核心思想</span></h2>
+      <p>
+        一个<strong>调度员（Supervisor）</strong>用 LLM 判断该把用户问题交给哪个<strong>子代理</strong>；
+        每个子代理只带自己的工具和系统提示，专注一类任务。
+        用户问「天气 + 小知识」时，调度员会<strong>先后</strong>派给 <code>weather_agent</code> 和 <code>trivia_agent</code>，而不是让一个模型包办一切。
+      </p>
+    </section>
+
+    <section>
+      <h2>整体架构图 <span class="badge">Mermaid</span></h2>
+      <div class="mermaid-wrap">
+        <pre class="mermaid">
+flowchart TB
+  subgraph Input["输入"]
+    U(["👤 HumanMessage<br/>查杭州天气 + 小知识"])
+  end
+
+  subgraph SupervisorLayer["createSupervisor()"]
+    S{{"🎯 Supervisor LLM<br/>只负责选人，不自己答内容"}}
+  end
+
+  subgraph Agents["子代理 createAgent()"]
+    W["☁️ weather_agent<br/>lookup_weather"]
+    T["📚 trivia_agent<br/>lookup_city_trivia"]
+  end
+
+  subgraph Mock["simple-mock.mjs"]
+    MW[("weatherTable")]
+    MT[("triviaTable")]
+  end
+
+  U --> S
+  S -->|"天气/气温/空气"| W
+  S -->|"小知识/名胜/历史"| T
+  W -->|"工具调用"| MW
+  T -->|"工具调用"| MT
+  W --> S
+  T --> S
+  S --> OUT(["✅ 最终 AIMessage"])
+
+  style S fill:#f59e0b22,stroke:#f59e0b
+  style W fill:#06b6d422,stroke:#06b6d4
+  style T fill:#a78bfa22,stroke:#a78bfa
+  style U fill:#f472b622,stroke:#f472b6
+        </pre>
+      </div>
+      <div class="legend">
+        <span><i class="dot" style="background:var(--human)"></i> 用户消息</span>
+        <span><i class="dot" style="background:var(--supervisor)"></i> Supervisor</span>
+        <span><i class="dot" style="background:var(--weather)"></i> weather_agent</span>
+        <span><i class="dot" style="background:var(--trivia)"></i> trivia_agent</span>
+        <span><i class="dot" style="background:var(--tool)"></i> Mock 数据</span>
+      </div>
+    </section>
+
+    <section>
+      <h2>源码模块拆解 <span class="badge">1–95 行</span></h2>
+      <table>
+        <thead>
+          <tr><th>行号区间</th><th>做什么</th><th>类型</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>1–17</td>
+            <td><code>dotenv</code> 加载环境变量；<code>ChatOpenAI</code> 连接模型（含自定义 <code>baseURL</code>）</td>
+            <td><span class="tag model">model</span></td>
+          </tr>
+          <tr>
+            <td>19–33</td>
+            <td>用 <code>tool()</code> + <code>zod</code> 定义两个工具，分别调用 mock 里的查天气 / 查小知识</td>
+            <td><span class="tag tool">tool</span></td>
+          </tr>
+          <tr>
+            <td>36–53</td>
+            <td><code>createAgent</code> 创建两个子代理，各绑一个工具和专属 <code>systemPrompt</code></td>
+            <td><span class="tag agent">agent</span></td>
+          </tr>
+          <tr>
+            <td>59–67</td>
+            <td><code>createSupervisor</code> 把两个子图的 <code>.graph</code> 注册进来，并写调度规则 <code>prompt</code></td>
+            <td><span class="tag agent">supervisor</span></td>
+          </tr>
+          <tr>
+            <td>69–72</td>
+            <td><code>compile()</code> 得到可执行应用；<code>getGraphAsync().drawMermaid()</code> 打印官方图结构</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>74–94</td>
+            <td>构造 <code>HumanMessage</code>，<code>stream</code> 跑图，收集 <code>nodePath</code> 和最终 <code>messages</code></td>
+            <td>—</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>两个子代理对比</h2>
+      <div class="grid-2">
+        <div class="card weather">
+          <h3>weather_agent</h3>
+          <ul>
+            <li>工具：<code>lookup_weather</code></li>
+            <li>触发词：天气、气温、下雨、空气</li>
+            <li>Mock 返回：summary、温度区间、AQI</li>
+          </ul>
+        </div>
+        <div class="card trivia">
+          <h3>trivia_agent</h3>
+          <ul>
+            <li>工具：<code>lookup_city_trivia</code></li>
+            <li>触发词：小知识、名胜、历史、介绍</li>
+            <li>Mock 返回：一句城市趣味知识 JSON</li>
+          </ul>
+        </div>
+      </div>
+      <div class="card supervisor" style="margin-top:1rem">
+        <h3>Supervisor 调度 prompt（节选）</h3>
+        <p>「你是调度员，只负责选人，不要自己报气温、也不要自己讲城市百科。」— 避免 Supervisor 与子代理职责重叠。</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>示例执行路径 <span class="badge">可点击逐步播放</span></h2>
+      <p style="margin:0 0 1rem;color:var(--muted);font-size:0.9rem">
+        用户输入：<em>「查一下杭州的天气，再讲一条和杭州有关的小知识。」</em>
+        — 典型路径是 Supervisor → 天气代理 → 回到 Supervisor → 小知识代理 → 结束。（实际节点名以你运行时的 <code>nodePath</code> 为准。）
+      </p>
+      <div class="controls">
+        <button type="button" id="btnPlay">▶ 自动播放</button>
+        <button type="button" class="secondary" id="btnNext">下一步</button>
+        <button type="button" class="secondary" id="btnReset">重置</button>
+      </div>
+      <div class="stepper" id="stepper"></div>
+      <div class="path-bar" id="pathBar">路径: （点击播放查看）</div>
+    </section>
+
+    <section>
+      <h2>流式输出在做什么 <span class="badge">streamMode</span></h2>
+      <pre>const stream = await app.stream(input, { streamMode: ["updates", "values"] });
+
+for await (const event of stream) {
+  const [mode, payload] = event;
+  if (mode === "updates")  nodePath.push(...Object.keys(payload));  // 哪个节点刚跑完
+  else if (mode === "values") finalState = payload;                 // 当前完整状态快照
+}</pre>
+      <p style="margin:1rem 0 0;font-size:0.88rem;color:var(--muted)">
+        <strong>updates</strong>：告诉你「刚执行了哪个节点」→ 用来拼 <code>路径: A → B → C</code><br />
+        <strong>values</strong>：整个图的 state（含全部 messages）→ 取最后一条作为最终回答
+      </p>
+    </section>
+
+    <section>
+      <h2>与 Mock 数据的关系</h2>
+      <pre>// simple-mock.mjs — 无真实 API，便于本地演示 Supervisor 分流
+lookupWeather("杭州")  → {"city":"杭州","summary":"多云转小雨",...}
+lookupCityTrivia("杭州") → {"city":"杭州","trivia":"西湖文化景观是世界文化遗产之一。"}</pre>
+    </section>
+
+    <section>
+      <h2>本地运行原脚本</h2>
+      <pre>cd langgraph-test
+# .env 需配置 OPENAI_API_KEY, MODEL_NAME, OPENAI_BASE_URL（可选）
+node src/multi-agent-supervisor.mjs</pre>
+      <p style="margin:0.75rem 0 0;font-size:0.88rem;color:var(--muted)">
+        控制台会先打印 Mermaid 图，再打印 <code>路径:</code> 和最后一条 AI 回复。
+      </p>
+    </section>
+  </main>
+
+  <footer>
+    生成说明页 · 打开方式：双击本 HTML 或在浏览器地址栏输入文件路径
+  </footer>
+
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: "dark",
+      flowchart: { curve: "basis", padding: 16 },
+    });
+
+    const STEPS = [
+      {
+        title: "构造输入",
+        body: "messages: [ HumanMessage('查一下杭州的天气，再讲一条和杭州有关的小知识。') ]",
+        nodes: [],
+      },
+      {
+        title: "Supervisor 分析意图",
+        body: "LLM 读到「天气」→ 决定先派 weather_agent；不自己查气温。",
+        nodes: ["supervisor"],
+      },
+      {
+        title: "weather_agent 执行",
+        body: "按 systemPrompt 调用 lookup_weather('杭州')，用中文简述 mock 返回的多云转小雨、15–22℃、AQI 良。",
+        nodes: ["supervisor", "weather_agent"],
+      },
+      {
+        title: "回到 Supervisor",
+        body: "天气部分已完成；还剩「小知识」→ 准备派 trivia_agent。",
+        nodes: ["supervisor", "weather_agent", "supervisor"],
+      },
+      {
+        title: "trivia_agent 执行",
+        body: "调用 lookup_city_trivia('杭州')，转述「西湖文化景观是世界文化遗产之一。」",
+        nodes: ["supervisor", "weather_agent", "supervisor", "trivia_agent"],
+      },
+      {
+        title: "Supervisor 收尾",
+        body: "两段子任务都完成 → 汇总或输出最终 AIMessage，stream 的 values 里 messages 最后一条即答案。",
+        nodes: ["supervisor", "weather_agent", "supervisor", "trivia_agent", "supervisor"],
+      },
+    ];
+
+    const stepperEl = document.getElementById("stepper");
+    const pathBar = document.getElementById("pathBar");
+    let current = -1;
+    let timer = null;
+
+    STEPS.forEach((s, i) => {
+      const div = document.createElement("div");
+      div.className = "step";
+      div.dataset.index = i;
+      div.innerHTML = `
+        <div class="step-num">${i + 1}</div>
+        <div class="step-body">
+          <strong>${s.title}</strong><br>${s.body}
+        </div>`;
+      stepperEl.appendChild(div);
+    });
+
+    function render() {
+      const steps = stepperEl.querySelectorAll(".step");
+      steps.forEach((el, i) => {
+        el.classList.remove("active", "done");
+        if (i < current) el.classList.add("done");
+        if (i === current) el.classList.add("active");
+      });
+      if (current >= 0 && current < STEPS.length) {
+        const nodes = STEPS[current].nodes;
+        pathBar.textContent =
+          nodes.length
+            ? "路径: " + nodes.join(" → ")
+            : "路径: （尚未进入图节点）";
+      }
+    }
+
+    function goNext() {
+      if (current < STEPS.length - 1) {
+        current++;
+        render();
+      } else {
+        stopPlay();
+      }
+    }
+
+    function reset() {
+      stopPlay();
+      current = -1;
+      pathBar.textContent = "路径: （点击播放查看）";
+      stepperEl.querySelectorAll(".step").forEach((el) => {
+        el.classList.remove("active", "done");
+      });
+    }
+
+    function stopPlay() {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+    }
+
+    document.getElementById("btnNext").addEventListener("click", () => {
+      stopPlay();
+      goNext();
+    });
+    document.getElementById("btnReset").addEventListener("click", reset);
+    document.getElementById("btnPlay").addEventListener("click", () => {
+      stopPlay();
+      reset();
+      current = 0;
+      render();
+      timer = setInterval(() => {
+        if (current >= STEPS.length - 1) {
+          stopPlay();
+          return;
+        }
+        goNext();
+      }, 1800);
+    });
+  </script>
+</body>
+</html>
