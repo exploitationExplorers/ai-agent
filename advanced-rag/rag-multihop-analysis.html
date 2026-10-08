@@ -1,0 +1,524 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>rag-multihop.mjs 代码分析</title>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: #131a2e;
+      --text: #e7ecff;
+      --muted: #a9b4d0;
+      --accent: #6ea8fe;
+      --ok: #3ddc97;
+      --warn: #ffcc66;
+      --danger: #ff7a90;
+      --border: #2a355a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: linear-gradient(160deg, #090e1b 0%, #0e1530 100%);
+      color: var(--text);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+    body::before,
+    body::after {
+      content: "";
+      position: fixed;
+      width: 42vmax;
+      height: 42vmax;
+      border-radius: 50%;
+      filter: blur(55px);
+      opacity: 0.2;
+      z-index: -2;
+      animation: floatBlob 16s ease-in-out infinite;
+      pointer-events: none;
+    }
+    body::before {
+      background: #3a7bff;
+      top: -12vmax;
+      left: -12vmax;
+    }
+    body::after {
+      background: #8a4dff;
+      right: -14vmax;
+      bottom: -14vmax;
+      animation-delay: -8s;
+    }
+    @keyframes floatBlob {
+      0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+      50% { transform: translate3d(0, 20px, 0) scale(1.08); }
+    }
+    .container {
+      max-width: 1140px;
+      margin: 0 auto;
+      padding: 28px 20px 40px;
+    }
+    h1, h2, h3 { margin: 0 0 12px; line-height: 1.3; }
+    h1 { font-size: 30px; }
+    h2 {
+      font-size: 22px;
+      margin-top: 28px;
+      border-left: 4px solid var(--accent);
+      padding-left: 10px;
+    }
+    p { margin: 0 0 10px; color: var(--muted); }
+    .panel {
+      background: rgba(19, 26, 46, 0.92);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      margin-top: 14px;
+      backdrop-filter: blur(8px);
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.22);
+      transition: transform 260ms ease, box-shadow 260ms ease, border-color 260ms ease;
+    }
+    .panel:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 16px 42px rgba(0, 0, 0, 0.28);
+      border-color: #385297;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 12px;
+    }
+    .card {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      background: rgba(255, 255, 255, 0.02);
+      transition: transform 220ms ease, border-color 220ms ease, background-color 220ms ease;
+    }
+    .card:hover {
+      transform: translateY(-4px);
+      border-color: #3d5db2;
+      background: rgba(255, 255, 255, 0.04);
+    }
+    .card h3 { font-size: 17px; margin-bottom: 6px; }
+    .tag {
+      display: inline-block;
+      font-size: 12px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 3px 9px;
+      margin-right: 6px;
+      margin-top: 6px;
+      color: var(--muted);
+      transition: transform 200ms ease, border-color 200ms ease;
+      animation: tagPulse 3s ease-in-out infinite;
+    }
+    .tag:hover {
+      transform: translateY(-2px) scale(1.03);
+      border-color: #4e6fd0;
+    }
+    @keyframes tagPulse {
+      0%, 100% { box-shadow: 0 0 0 rgba(110, 168, 254, 0); }
+      50% { box-shadow: 0 0 16px rgba(110, 168, 254, 0.18); }
+    }
+    .ok { color: var(--ok); }
+    .warn { color: var(--warn); }
+    .danger { color: var(--danger); }
+    code {
+      background: #1d2745;
+      padding: 2px 6px;
+      border-radius: 6px;
+      color: #cfe0ff;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 13px;
+    }
+    pre {
+      margin: 0;
+      padding: 12px;
+      overflow: auto;
+      background: #111938;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      color: #dbe6ff;
+      font-size: 13px;
+      white-space: pre-wrap;
+    }
+    ul { margin: 6px 0 0 18px; padding: 0; }
+    li { margin-bottom: 6px; color: var(--muted); }
+    .flow {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+    .node {
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #182141;
+      min-width: 140px;
+      text-align: center;
+      color: #d7e4ff;
+      transition: transform 220ms ease, border-color 220ms ease;
+      animation: breathe 3.2s ease-in-out infinite;
+    }
+    .node:hover {
+      transform: translateY(-3px);
+      border-color: #4f73d6;
+    }
+    @keyframes breathe {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-2px); }
+    }
+    .arrow { color: var(--accent); font-weight: bold; }
+    .footer {
+      margin-top: 26px;
+      color: #7f8bb0;
+      font-size: 13px;
+    }
+    .progress-bar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 3px;
+      background: rgba(255, 255, 255, 0.08);
+      z-index: 20;
+    }
+    .progress-bar > span {
+      display: block;
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #6ea8fe, #8a4dff);
+      box-shadow: 0 0 10px rgba(110, 168, 254, 0.6);
+      transition: width 120ms linear;
+    }
+    .reveal {
+      opacity: 0;
+      transform: translateY(18px);
+      transition: opacity 520ms ease, transform 520ms ease;
+    }
+    .reveal.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation: none !important;
+        transition: none !important;
+      }
+      .reveal, .reveal.show {
+        opacity: 1;
+        transform: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="progress-bar"><span id="scrollProgress"></span></div>
+  <div class="container">
+    <h1><code>rag-multihop.mjs</code> 代码分析报告</h1>
+    <p>该脚本实现了“路由 + 多跳拆解 + 循环检索 + 动态规划 + 最终生成”的增强版 RAG，适合处理链式推理问题。</p>
+
+    <h2 class="reveal">1) 整体流程（多跳 RAG）</h2>
+    <div class="panel reveal">
+      <div class="flow">
+        <div class="node">START</div>
+        <div class="arrow">→</div>
+        <div class="node">route_question</div>
+        <div class="arrow">→</div>
+        <div class="node">simple?</div>
+        <div class="arrow">→</div>
+        <div class="node">direct_answer</div>
+        <div class="arrow">→</div>
+        <div class="node">END</div>
+      </div>
+      <div class="flow" style="margin-top: 10px;">
+        <div class="node">route_question</div>
+        <div class="arrow">→</div>
+        <div class="node">decompose_question</div>
+        <div class="arrow">→</div>
+        <div class="node">retrieve</div>
+        <div class="arrow">→</div>
+        <div class="node">plan_next_step</div>
+        <div class="arrow">→</div>
+        <div class="node">retrieve / generate</div>
+        <div class="arrow">→</div>
+        <div class="node">END</div>
+      </div>
+      <p style="margin-top: 12px;">与普通 RAG 不同点：复杂问题先拆为子问题序列，再分轮检索，并在每轮后由规划器判断“继续检索还是生成答案”。</p>
+    </div>
+
+    <h2 class="reveal">2) 状态设计（GraphState）</h2>
+    <div class="panel reveal">
+      <div class="grid">
+        <div class="card">
+          <h3>基础输入</h3>
+          <ul>
+            <li><code>question</code>：原始用户问题。</li>
+            <li><code>k</code>：每轮检索 top-k。</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>路由相关</h3>
+          <ul>
+            <li><code>strategy</code>：simple / complex。</li>
+            <li><code>routeReason</code>：路由原因文本。</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>多跳相关</h3>
+          <ul>
+            <li><code>subQuestions</code>：有序子问题列表。</li>
+            <li><code>nextSubIdx</code>：下一轮检索子问题下标。</li>
+            <li><code>currentQuery</code>：本轮实际检索 query。</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>循环控制</h3>
+          <ul>
+            <li><code>retrievalCount</code>：已检索轮数。</li>
+            <li><code>maxRetrievals</code>：最大检索轮数。</li>
+            <li><code>plannedNext</code>：规划器决策 retrieve/generate。</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>结果相关</h3>
+          <ul>
+            <li><code>documents</code>：累计去重后的文档池。</li>
+            <li><code>generation</code>：最终回答。</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <h2 class="reveal">3) 逐段代码释义（按行号）</h2>
+    <div class="panel reveal">
+      <div class="card">
+        <h3>片段 A（L1-L23）依赖与模型初始化</h3>
+        <pre>import "dotenv/config";
+import { z } from "zod";
+import { ChatOpenAI, OpenAIEmbeddings } from "@langchain/openai";
+...
+const llm = new ChatOpenAI({ ... });
+const embeddings = new OpenAIEmbeddings({ ... });</pre>
+        <ul>
+          <li><b>含义：</b>准备环境、结构化输出能力、生成模型和向量模型。</li>
+          <li><b>输入：</b><code>OPENAI_BASE_URL</code> 与 <code>OPENAI_API_KEY</code>。</li>
+        </ul>
+      </div>
+
+      <div class="card" style="margin-top: 12px;">
+        <h3>片段 B（L28-L43）GraphState 设计</h3>
+        <pre>const GraphState = Annotation.Root({
+  question, k, strategy, routeReason,
+  subQuestions, nextSubIdx, documents, currentQuery,
+  retrievalCount, maxRetrievals, plannedNext, generation
+});</pre>
+        <ul>
+          <li><b>含义：</b>把“多跳检索循环”需要的上下文都放进统一状态。</li>
+          <li><b>价值：</b>可追踪每轮检索与决策，不丢链路信息。</li>
+        </ul>
+      </div>
+
+      <div class="card" style="margin-top: 12px;">
+        <h3>片段 C（L47-L80）检索与去重合并</h3>
+        <pre>async function retrieveRelevantContent(question, k) { ... }
+function mergeUnique(existingDocs, newDocs) { ... }</pre>
+        <ul>
+          <li><b>含义：</b>每轮检索后，将新文档并入累计池，并按 id 去重保留更高分版本。</li>
+          <li><b>价值：</b>多轮检索不会无限堆积重复片段。</li>
+          <li><b>输出：</b>按 score 降序排序的累计文档列表。</li>
+        </ul>
+      </div>
+
+      <div class="card" style="margin-top: 12px;">
+        <h3>片段 D（L82-L95）结构化输出 Schema</h3>
+        <pre>RouteSchema: simple/complex
+DecomposeSchema: sub_questions + reason
+NextStepSchema: retrieve/generate + reason</pre>
+        <ul>
+          <li><b>含义：</b>路由、拆解、规划都使用结构化约束，减少模型自由发挥造成的流程不稳定。</li>
+        </ul>
+      </div>
+
+      <div class="card" style="margin-top: 12px;">
+        <h3>片段 E（L97-L121）routeQuestionNode</h3>
+        <pre>const route = await router.invoke(`...`);
+return {
+  strategy, routeReason,
+  retrievalCount: 0, maxRetrievals, documents: [],
+  subQuestions: [], nextSubIdx: 0, currentQuery: ""
+};</pre>
+        <ul>
+          <li><b>含义：</b>先判断问题复杂度，再初始化多跳流程的计数器和容器。</li>
+          <li><b>输出：</b>若 simple 走直答，若 complex 继续拆解。</li>
+        </ul>
+      </div>
+
+      <div class="card" style="margin-top: 12px;">
+        <h3>片段 F（L123-L156）decomposeQuestionNode</h3>
+        <pre>const out = await decomposer.invoke(`拆解子问题...`);
+const subQuestions = out.sub_questions.map(...).filter(Boolean);
+return { subQuestions, nextSubIdx: 0, currentQuery: subQuestions[0] };</pre>
+        <ul>
+          <li><b>含义：</b>把复杂问题拆成“可独立检索”的有序子问题。</li>
+          <li><b>约束：</b>要求避免代词、保证顺序符合推理链。</li>
+          <li><b>异常：</b>子问题为空时直接抛错，防止后续空检索。</li>
+        </ul>
+      </div>
+
+      <div class="card" style="margin-top: 12px;">
+        <h3>片段 G（L158-L201）retrieveNode（循环体）</h3>
+        <pre>const q = subs[idx];
+const newDocs = await retrieveRelevantContent(q, state.k);
+const merged = mergeUnique(state.documents ?? [], newDocs);
+return { documents: merged, retrievalCount: round, nextSubIdx: idx + 1, currentQuery: q };</pre>
+        <ul>
+          <li><b>含义：</b>每轮按当前子问题检索，并更新累计文档池与轮次。</li>
+          <li><b>日志：</b>打印每轮命中条数、摘要、分数，便于分析召回质量。</li>
+        </ul>
+      </div>
+
+      <div class="card" style="margin-top: 12px;">
+        <h3>片段 H（L203-L262）planNextStepNode</h3>
+        <pre>const { nextAction } = await llm.withStructuredOutput(NextStepSchema).invoke(prompt);
+let finalNext = nextAction;
+if (retrievalCount >= maxRetrievals) finalNext = "generate";
+if (remaining <= 0) finalNext = "generate";
+return { plannedNext: finalNext };</pre>
+        <ul>
+          <li><b>含义：</b>规划器结合“剩余子问题 + 已召回证据 + 轮数上限”决定下一步。</li>
+          <li><b>硬兜底：</b>就算模型想继续检索，也会被上限规则强制转生成。</li>
+          <li><b>作用：</b>避免检索轮次失控，控制延迟与成本。</li>
+        </ul>
+      </div>
+
+      <div class="card" style="margin-top: 12px;">
+        <h3>片段 I（L264-L347）分支函数与图编排</h3>
+        <pre>afterRoute: simple -> direct_answer; complex -> decompose_question
+afterPlan: plannedNext === "retrieve" ? retrieve : generate</pre>
+        <ul>
+          <li><b>含义：</b>形成“route + loop”的完整状态机。</li>
+          <li><b>特点：</b><code>retrieve -> plan_next_step -> retrieve/generate</code> 是多跳核心闭环。</li>
+        </ul>
+      </div>
+
+      <div class="card" style="margin-top: 12px;">
+        <h3>片段 J（L349-L444）main 启动流程</h3>
+        <pre>// 打印 Mermaid -> 连接 Milvus -> invoke graph -> 打印子问题与累计检索结果
+main().catch((err) => { ...process.exit(1); });</pre>
+        <ul>
+          <li><b>含义：</b>初始化依赖后执行图，最后输出策略、检索轮次与回答状态。</li>
+          <li><b>容错：</b>顶层 catch 捕获未处理异常并退出进程。</li>
+        </ul>
+      </div>
+    </div>
+
+    <h2 class="reveal">4) 这份实现的优点</h2>
+    <div class="panel reveal">
+      <span class="tag ok">多跳拆解</span>
+      <span class="tag ok">循环检索</span>
+      <span class="tag ok">结构化决策</span>
+      <span class="tag ok">轮数上限兜底</span>
+      <ul>
+        <li>比单轮 RAG 更适合处理“人物关系链、因果链、跨章节事实”问题。</li>
+        <li>有累计文档池与去重逻辑，证据覆盖更广。</li>
+        <li>规划节点能在“证据够了”时提前结束，避免无意义检索。</li>
+      </ul>
+    </div>
+
+    <h2 class="reveal">5) 缺点 / 风险点</h2>
+    <div class="panel reveal">
+      <div class="grid">
+        <div class="card">
+          <h3 class="danger">代码正确性风险</h3>
+          <ul>
+            <li>当前代码片段中出现 <code>newMap</code>、<code>returnArray</code>、<code>thrownewError</code> 这类写法，若源码一致会直接运行失败。</li>
+            <li>建议优先做语法与静态检查，先保证可运行。</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3 class="danger">路由与规划误判</h3>
+          <ul>
+            <li>路由误判可能导致该检索的问题走直答，事实性下降。</li>
+            <li>规划误判可能过早生成，造成证据不足。</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3 class="warn">性能与成本</h3>
+          <ul>
+            <li>每轮都调用 LLM（拆解/规划/生成），复杂问题成本明显上升。</li>
+            <li>Milvus 在启动阶段就连接，simple 分支也承担初始化开销。</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3 class="warn">召回质量上限</h3>
+          <ul>
+            <li>目前仅向量检索，无 rerank、无混合检索、无 metadata 精细过滤。</li>
+            <li>多跳依赖拆解质量，若子问题质量差会放大误差。</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3 class="warn">可配置性不足</h3>
+          <ul>
+            <li><code>question</code>、<code>k</code>、<code>maxRetrievals</code>、Milvus 地址等写死在代码里。</li>
+            <li>建议支持 CLI 参数和环境变量，便于不同场景复用。</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3 class="warn">缺少自动化评估</h3>
+          <ul>
+            <li>没有多跳问答基准集与回归测试，难以量化改动收益。</li>
+            <li>建议建立“命中率/答案正确率/平均轮次/平均耗时”指标。</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <h2 class="reveal">6) 建议的优化优先级</h2>
+    <div class="panel reveal">
+      <ol style="margin: 0 0 0 18px; color: var(--muted);">
+        <li>先修复潜在语法错误并加最小单测，保证流程可跑可回归。</li>
+        <li>改为 complex 分支才初始化 Milvus，降低 simple 路径延迟。</li>
+        <li>引入 rerank 与 metadata 过滤，提高每轮检索命中质量。</li>
+        <li>给路由/规划增加置信度与回退策略（低置信度时追加检索）。</li>
+      </ol>
+    </div>
+
+    <div class="footer">
+      生成说明：本地静态分析页面，可直接在浏览器打开。
+    </div>
+  </div>
+  <script>
+    (function () {
+      const progress = document.getElementById("scrollProgress");
+      const revealEls = Array.from(document.querySelectorAll(".reveal"));
+
+      function updateProgress() {
+        const scrollTop = window.scrollY || document.documentElement.scrollTop;
+        const docHeight =
+          document.documentElement.scrollHeight - window.innerHeight;
+        const ratio = docHeight > 0 ? (scrollTop / docHeight) * 100 : 0;
+        progress.style.width = Math.min(100, Math.max(0, ratio)) + "%";
+      }
+
+      const observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              entry.target.classList.add("show");
+              observer.unobserve(entry.target);
+            }
+          });
+        },
+        { threshold: 0.08, rootMargin: "0px 0px -8% 0px" },
+      );
+
+      revealEls.forEach((el) => observer.observe(el));
+      updateProgress();
+      window.addEventListener("scroll", updateProgress, { passive: true });
+      window.addEventListener("resize", updateProgress);
+    })();
+  </script>
+</body>
+</html>

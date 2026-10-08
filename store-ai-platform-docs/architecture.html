@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>店播AI · 系统架构与开发路线</title>
+<style>
+  :root {
+    --bg: #0b1020;
+    --panel: #121a30;
+    --panel-2: #18223d;
+    --line: #26325a;
+    --text: #e6ebff;
+    --muted: #93a0c8;
+    --c-client: #38bdf8;
+    --c-gw: #a78bfa;
+    --c-biz: #34d399;
+    --c-ai: #f472b6;
+    --c-flow: #fbbf24;
+    --c-data: #60a5fa;
+    --c-ext: #fb923c;
+    --c-infra: #94a3b8;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "PingFang SC", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+    background: radial-gradient(1200px 600px at 10% -10%, #1b2a55 0%, transparent 60%),
+                radial-gradient(900px 500px at 110% 10%, #3a1d4d 0%, transparent 55%),
+                var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 32px 24px 80px;
+  }
+  .wrap { max-width: 1320px; margin: 0 auto; }
+  header { margin-bottom: 28px; }
+  header h1 { font-size: 30px; letter-spacing: 1px; }
+  header h1 span { background: linear-gradient(90deg, #38bdf8, #f472b6); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  header p { color: var(--muted); margin-top: 6px; }
+  nav { display: flex; gap: 8px; flex-wrap: wrap; margin: 18px 0 30px; position: sticky; top: 0; z-index: 10; padding: 10px 0; background: linear-gradient(var(--bg) 70%, transparent); }
+  nav a { color: var(--text); text-decoration: none; font-size: 13px; padding: 6px 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); }
+  nav a:hover { border-color: var(--c-client); }
+
+  section { margin-bottom: 56px; }
+  h2 { font-size: 22px; margin-bottom: 6px; display: flex; align-items: center; gap: 10px; }
+  h2::before { content: ""; width: 6px; height: 22px; border-radius: 3px; background: linear-gradient(#38bdf8, #f472b6); }
+  .sub { color: var(--muted); font-size: 14px; margin-bottom: 18px; }
+
+  /* ---------- 分层架构 ---------- */
+  .arch { display: grid; grid-template-columns: 1fr 220px; gap: 14px; }
+  .layers { display: flex; flex-direction: column; gap: 10px; }
+  .layer { display: grid; grid-template-columns: 120px 1fr; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+  .layer-title { display: flex; flex-direction: column; justify-content: center; padding: 12px 14px; font-weight: 700; font-size: 14px; border-right: 1px solid var(--line); }
+  .layer-title small { font-weight: 400; color: var(--muted); font-size: 11px; margin-top: 2px; }
+  .layer-body { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px; }
+  .box { background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; font-size: 13px; min-width: 120px; }
+  .box b { display: block; font-size: 13px; }
+  .box i { font-style: normal; color: var(--muted); font-size: 11.5px; }
+  .box.hl { box-shadow: 0 0 0 1px currentColor inset; }
+  .group { border: 1px dashed var(--line); border-radius: 12px; padding: 8px; display: flex; flex-wrap: wrap; gap: 8px; flex: 1 1 100%; }
+  .group > .gname { width: 100%; font-size: 12px; color: var(--muted); padding-left: 2px; }
+
+  .l-client .layer-title { color: var(--c-client); } .l-client .box { border-left: 3px solid var(--c-client); }
+  .l-gw .layer-title { color: var(--c-gw); }         .l-gw .box { border-left: 3px solid var(--c-gw); }
+  .l-biz .layer-title { color: var(--c-biz); }       .l-biz .box { border-left: 3px solid var(--c-biz); }
+  .l-ai .layer-title { color: var(--c-ai); }         .l-ai .box { border-left: 3px solid var(--c-ai); }
+  .l-flow .layer-title { color: var(--c-flow); }     .l-flow .box { border-left: 3px solid var(--c-flow); }
+  .l-data .layer-title { color: var(--c-data); }     .l-data .box { border-left: 3px solid var(--c-data); }
+  .l-ext .layer-title { color: var(--c-ext); }       .l-ext .box { border-left: 3px solid var(--c-ext); }
+
+  .side { display: flex; flex-direction: column; gap: 10px; }
+  .side .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px; }
+  .side .card h4 { font-size: 13px; color: var(--c-infra); margin-bottom: 8px; }
+  .side .card ul { list-style: none; font-size: 12.5px; }
+  .side .card li { padding: 4px 0; border-bottom: 1px dashed var(--line); }
+  .side .card li:last-child { border-bottom: 0; }
+  .side .card li span { color: var(--muted); font-size: 11.5px; display: block; }
+
+  /* ---------- 流程图 ---------- */
+  .flow { display: flex; align-items: stretch; gap: 0; overflow-x: auto; padding-bottom: 8px; }
+  .step { flex: 1 0 170px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; position: relative; }
+  .step .no { font-size: 11px; color: var(--muted); }
+  .step h5 { font-size: 14px; margin: 2px 0 6px; }
+  .step p { font-size: 12px; color: var(--muted); }
+  .step .tag { display: inline-block; font-size: 10.5px; padding: 1px 8px; border-radius: 999px; margin-top: 8px; }
+  .tag.code { background: rgba(52,211,153,.15); color: var(--c-biz); }
+  .tag.llm  { background: rgba(244,114,182,.15); color: var(--c-ai); }
+  .tag.human{ background: rgba(251,191,36,.15); color: var(--c-flow); }
+  .tag.api  { background: rgba(251,146,60,.15); color: var(--c-ext); }
+  .arrow { flex: 0 0 34px; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 20px; }
+  .loopnote { margin-top: 10px; font-size: 12.5px; color: var(--muted); background: var(--panel); border: 1px dashed var(--line); border-radius: 10px; padding: 10px 14px; }
+  .loopnote b { color: var(--c-ai); }
+
+  /* ---------- 闭环 ---------- */
+  .loop { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
+  .loop .node { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; text-align: center; position: relative; }
+  .loop .node .ico { font-size: 22px; }
+  .loop .node h5 { font-size: 14px; margin: 4px 0; }
+  .loop .node p { font-size: 11.5px; color: var(--muted); }
+  .loop .node:not(:last-child)::after { content: "→"; position: absolute; right: -10px; top: 50%; transform: translate(50%, -50%); color: var(--muted); }
+  .loop-back { text-align: center; margin-top: 8px; color: var(--muted); font-size: 12.5px; }
+
+  /* ---------- 技术栈 ---------- */
+  .stack { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 12px; }
+  .stack .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+  .stack .card h4 { font-size: 14px; margin-bottom: 8px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { font-size: 12px; padding: 3px 10px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--line); }
+
+  /* ---------- 路线图 ---------- */
+  .gantt { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; overflow-x: auto; }
+  .g-row { display: grid; grid-template-columns: 180px repeat(20, minmax(32px, 1fr)); align-items: center; min-width: 900px; }
+  .g-row + .g-row { margin-top: 8px; }
+  .g-head div { font-size: 11px; color: var(--muted); text-align: center; }
+  .g-name { font-size: 13px; padding-right: 10px; }
+  .g-name small { display: block; color: var(--muted); font-size: 11px; }
+  .bar { height: 26px; border-radius: 8px; font-size: 11.5px; display: flex; align-items: center; padding: 0 10px; color: #0b1020; font-weight: 600; white-space: nowrap; overflow: hidden; }
+  .milestone { margin-top: 14px; font-size: 12.5px; color: var(--muted); }
+  .milestone b { color: var(--c-ext); }
+
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 10px; }
+  .legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; background: var(--c); }
+
+  footer { color: var(--muted); font-size: 12px; text-align: center; margin-top: 40px; }
+
+  @media (max-width: 960px) {
+    .arch { grid-template-columns: 1fr; }
+    .layer { grid-template-columns: 1fr; }
+    .layer-title { border-right: 0; border-bottom: 1px solid var(--line); }
+    .loop { grid-template-columns: repeat(2, 1fr); }
+    .loop .node::after { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1><span>店播AI</span> · 门店经营 + AI 短视频营销 SaaS</h1>
+    <p>系统架构图 · Agent 流程 · 视频生产流水线 · 开发路线 ｜ 配套文档：开发文档.md ｜ v1.0 · 2026-09</p>
+  </header>
+
+  <nav>
+    <a href="#loop">业务闭环</a>
+    <a href="#arch">整体架构</a>
+    <a href="#agent">AI Agent 流程</a>
+    <a href="#video">视频生产流水线</a>
+    <a href="#stack">技术栈</a>
+    <a href="#roadmap">开发路线</a>
+  </nav>
+
+  <!-- ================= 业务闭环 ================= -->
+  <section id="loop">
+    <h2>业务闭环</h2>
+    <p class="sub">经营数据驱动内容，内容带来客户，客户再产生经营数据 —— 这是和普通收银软件、普通 AI 剪辑工具的本质区别。</p>
+    <div class="loop">
+      <div class="node"><div class="ico">🧾</div><h5>门店经营</h5><p>收银 · 库存 · 会员<br/>每天产生结构化数据</p></div>
+      <div class="node"><div class="ico">🧠</div><h5>AI Agent</h5><p>读数据 → 选题<br/>→ 写口播脚本</p></div>
+      <div class="node"><div class="ico">🧑‍💼</div><h5>数字人</h5><p>店主形象 + 声音<br/>渲染 9:16 视频</p></div>
+      <div class="node"><div class="ico">📤</div><h5>分发</h5><p>抖音 / 视频号<br/>带门店 POI</p></div>
+      <div class="node"><div class="ico">📥</div><h5>线索回流</h5><p>私信 / 留资 / 企微<br/>自动建客户档案</p></div>
+      <div class="node"><div class="ico">🏪</div><h5>到店转化</h5><p>核销 · 入会 · 复购<br/>数据回到经营</p></div>
+    </div>
+    <div class="loop-back">↺ 视频效果数据（播放 / 点赞 / 线索）回写给 Agent，下一次选题更准</div>
+  </section>
+
+  <!-- ================= 整体架构 ================= -->
+  <section id="arch">
+    <h2>整体架构</h2>
+    <p class="sub">Go 模块化单体 + Eino Agent + Temporal 编排 + PostgreSQL（RLS 多租户）。先单体、后拆分；接口契约统一由 Protobuf 定义。</p>
+    <div class="arch">
+      <div class="layers">
+
+        <div class="layer l-client">
+          <div class="layer-title">客户端层<small>React 技术栈统一</small></div>
+          <div class="layer-body">
+            <div class="box"><b>店主 App</b><i>Expo · React Native</i></div>
+            <div class="box"><b>收银 POS</b><i>Expo + 原生打印/钱箱/扫码</i></div>
+            <div class="box"><b>微信小程序</b><i>Taro 4 · 扫码点餐/会员</i></div>
+            <div class="box"><b>抖音小程序</b><i>Taro 4 · 团购/留资</i></div>
+            <div class="box"><b>商户后台</b><i>React 19 + Vite + shadcn</i></div>
+            <div class="box"><b>代理后台</b><i>React 19 + Vite</i></div>
+            <div class="box"><b>平台运营后台</b><i>模板库 / 审核 / 结算</i></div>
+          </div>
+        </div>
+
+        <div class="layer l-gw">
+          <div class="layer-title">接入层<small>统一入口</small></div>
+          <div class="layer-body">
+            <div class="box"><b>API 网关</b><i>Higress / APISIX</i></div>
+            <div class="box"><b>鉴权</b><i>JWT · 租户上下文注入</i></div>
+            <div class="box"><b>限流 / 灰度</b><i>按租户、按套餐</i></div>
+            <div class="box"><b>AI 网关</b><i>模型路由 · Token 计量</i></div>
+            <div class="box"><b>Webhook 入口</b><i>支付 / 抖音 / 微信回调</i></div>
+            <div class="box"><b>CDN + WAF</b><i>静态资源 / 视频</i></div>
+          </div>
+        </div>
+
+        <div class="layer l-biz">
+          <div class="layer-title">业务层<small>Go · Connect-RPC</small></div>
+          <div class="layer-body">
+            <div class="group"><div class="gname">平台底座 M0</div>
+              <div class="box"><b>租户 / 门店 / 员工</b></div>
+              <div class="box"><b>权限 RBAC</b><i>Casbin / OpenFGA</i></div>
+              <div class="box"><b>订阅计费</b><i>套餐 · 加购包</i></div>
+              <div class="box"><b>通知 / 文件 / 审计</b></div>
+            </div>
+            <div class="group"><div class="gname">门店经营 M1</div>
+              <div class="box"><b>商品 SPU/SKU</b></div>
+              <div class="box"><b>库存 · 预警</b></div>
+              <div class="box"><b>收银 · 订单</b><i>支持离线</i></div>
+              <div class="box"><b>聚合支付适配</b></div>
+              <div class="box"><b>会员 · 营销</b></div>
+              <div class="box"><b>报表</b></div>
+              <div class="box"><b>🍜 餐饮包</b><i>菜品 · 桌台 · 扫码点餐 · BOM</i></div>
+              <div class="box"><b>👗 服装包</b><i>款色码 · 换季 · 滞销</i></div>
+            </div>
+            <div class="group"><div class="gname">分发与 CRM M4 · 代理 M5</div>
+              <div class="box"><b>抖音 / 视频号分发</b></div>
+              <div class="box"><b>线索 · 客户档案 One-ID</b></div>
+              <div class="box"><b>代理层级 · 报备归属</b></div>
+              <div class="box"><b>佣金 · T+15 结算</b></div>
+              <div class="box"><b>控价策略</b></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="layer l-ai">
+          <div class="layer-title">AI 层<small>核心差异化</small></div>
+          <div class="layer-body">
+            <div class="box hl" style="color:var(--c-ai)"><b style="color:var(--text)">Agent 服务</b><i>Go · Eino ADK 多 Agent</i></div>
+            <div class="box"><b>门店数据 MCP Server</b><i>只读工具 · 强制租户隔离</i></div>
+            <div class="box"><b>信号引擎</b><i>低库存 / 爆款 / 滞销 / 新品</i></div>
+            <div class="box"><b>文案模板库</b><i>pgvector · 餐饮/服装</i></div>
+            <div class="box"><b>内容审核</b><i>词库 + 小模型 + 事实核对</i></div>
+            <div class="box"><b>数字人网关</b><i>多供应商适配器</i></div>
+            <div class="box"><b>渲染 Worker</b><i>Remotion + FFmpeg</i></div>
+            <div class="box"><b>GPU 推理（二期）</b><i>自建口型驱动 / TTS</i></div>
+          </div>
+        </div>
+
+        <div class="layer l-flow">
+          <div class="layer-title">编排与事件<small>可靠性</small></div>
+          <div class="layer-body">
+            <div class="box"><b>Temporal</b><i>每日任务 · 渲染 · 发布 · 结算</i></div>
+            <div class="box"><b>NATS JetStream</b><i>领域事件总线</i></div>
+            <div class="box"><b>Outbox Relay</b><i>事务内事件不丢</i></div>
+          </div>
+        </div>
+
+        <div class="layer l-data">
+          <div class="layer-title">数据层<small>单库起步</small></div>
+          <div class="layer-body">
+            <div class="box"><b>PostgreSQL 17+</b><i>RLS 多租户 · 主业务库</i></div>
+            <div class="box"><b>pgvector</b><i>模板 / 知识检索</i></div>
+            <div class="box"><b>Valkey</b><i>缓存 · 锁 · 限流</i></div>
+            <div class="box"><b>ClickHouse（二期）</b><i>报表 · 效果分析</i></div>
+            <div class="box"><b>对象存储</b><i>OSS / TOS · 视频素材</i></div>
+            <div class="box"><b>Meilisearch</b><i>商品 / 会员搜索（可选）</i></div>
+          </div>
+        </div>
+
+        <div class="layer l-ext">
+          <div class="layer-title">外部生态<small>第三方</small></div>
+          <div class="layer-body">
+            <div class="box"><b>持牌支付机构</b><i>微信 / 支付宝 / 云闪付</i></div>
+            <div class="box"><b>大模型</b><i>豆包 · Qwen · DeepSeek</i></div>
+            <div class="box"><b>数字人 / 声音克隆</b><i>火山 · 硅基 · MiniMax 等</i></div>
+            <div class="box"><b>抖音开放平台</b><i>授权 · 发布 · 数据 · 线索</i></div>
+            <div class="box"><b>微信 / 企业微信</b><i>小程序 · 订阅消息 · 获客</i></div>
+            <div class="box"><b>电子签 / 实名活体</b><i>克隆授权</i></div>
+            <div class="box"><b>灵活用工</b><i>代理佣金代发</i></div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="side">
+        <div class="card">
+          <h4>☁️ 基础设施</h4>
+          <ul>
+            <li>Kubernetes<span>ACK / VKE，早期可用 Serverless 容器</span></li>
+            <li>GitOps<span>GitHub Actions + Argo CD</span></li>
+            <li>IaC<span>Terraform / OpenTofu</span></li>
+            <li>密钥<span>云 KMS · 字段级加密</span></li>
+          </ul>
+        </div>
+        <div class="card">
+          <h4>🔭 可观测</h4>
+          <ul>
+            <li>OpenTelemetry<span>链路 · 指标 · 日志统一采集</span></li>
+            <li>Grafana LGTM<span>Loki / Tempo / Mimir</span></li>
+            <li>Langfuse / CozeLoop<span>LLM 调用追踪 · Prompt 版本 · 评测</span></li>
+            <li>Sentry<span>前端 / App 崩溃</span></li>
+          </ul>
+        </div>
+        <div class="card">
+          <h4>🛡️ 合规</h4>
+          <ul>
+            <li>AI 生成内容标识<span>显式角标 + 隐式元数据</span></li>
+            <li>深度合成算法备案</li>
+            <li>肖像 / 声音授权<span>实名 + 活体 + 电子签</span></li>
+            <li>资金不经平台<span>规避二清</span></li>
+            <li>等保二级 · PIPL</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h4>🧩 契约</h4>
+          <ul>
+            <li>Protobuf + buf<span>一份定义 → Go 服务端 + TS 客户端 + OpenAPI</span></li>
+            <li>sqlc<span>SQL → 类型安全的 Go 代码</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= Agent 流程 ================= -->
+  <section id="agent">
+    <h2>AI Agent 流程 ·「每日营销官」</h2>
+    <p class="sub">原则：<b>数字交给代码，创意交给模型</b>。触发方式：Temporal 每天定时（07:30 按租户分批）/ 店主手动 / 事件触发（如 stock.low）。</p>
+    <div class="flow">
+      <div class="step"><div class="no">STEP 1</div><h5>数据采集</h5><p>通过 MCP 工具读取营业额、爆款、库存、新品、滞销、会员、历史视频效果 → 生成当日快照</p><span class="tag code">确定性代码</span></div>
+      <div class="arrow">➜</div>
+      <div class="step"><div class="no">STEP 2</div><h5>信号识别</h5><p>规则引擎打分：低库存爆款、N 天滞销、新品上新、营业额异动、节日节气</p><span class="tag code">规则引擎</span></div>
+      <div class="arrow">➜</div>
+      <div class="step"><div class="no">STEP 3</div><h5>选题决策</h5><p>TopicPlanner Agent 结合行业、季节、门店人设、历史效果，选出 1~3 个选题和营销目标</p><span class="tag llm">LLM · 结构化输出</span></div>
+      <div class="arrow">➜</div>
+      <div class="step"><div class="no">STEP 4</div><h5>脚本创作</h5><p>ScriptWriter Agent 检索爆款模板库，写出「钩子-卖点-促单-行动」口播脚本 + 字幕关键词 + 话题</p><span class="tag llm">LLM + RAG</span></div>
+      <div class="arrow">➜</div>
+      <div class="step"><div class="no">STEP 5</div><h5>审核</h5><p>广告法极限词、平台违规词、价格/库存事实核对；不通过就带着意见打回 Step 4（最多 2 轮）</p><span class="tag llm">规则 + LLM</span></div>
+      <div class="arrow">➜</div>
+      <div class="step"><div class="no">STEP 6</div><h5>店主确认</h5><p>推送选题卡片：编辑 / 换一版 / 一键生成视频（Eino 中断恢复 + Temporal Signal）</p><span class="tag human">Human-in-the-loop</span></div>
+    </div>
+    <div class="loopnote">
+      <b>示例：</b>信号 <code>LOW_STOCK_HOT</code> ——「法式碎花连衣裙，7 天卖 26 件，仅剩 3 件（S/M）」→ 脚本开头：
+      「姐妹们别划走！这条裙子我们店 7 天卖了 26 件，现在只剩最后 3 件了！」—— 其中 <b>26</b>、<b>3</b>、<b>S/M</b> 都来自快照字段，审核时逐项核对，杜绝模型编造。
+    </div>
+  </section>
+
+  <!-- ================= 视频流水线 ================= -->
+  <section id="video">
+    <h2>视频生产流水线</h2>
+    <p class="sub">Temporal Workflow <code>RenderVideoWorkflow</code>，每一步都可以重试、超时和补偿；数字人供应商通过适配器可以随时切换。</p>
+    <div class="flow">
+      <div class="step"><div class="no">一次性</div><h5>形象 / 声音克隆</h5><p>上传 15~30s 视频 → 质检 → 实名 + 活体 + 电子签授权 → 克隆 → 试听确认</p><span class="tag api">厂商 API</span></div>
+      <div class="arrow">➜</div>
+      <div class="step"><div class="no">① TTS</div><h5>克隆声音合成</h5><p>脚本 → 音频 + 字级时间戳（用于字幕对齐）</p><span class="tag api">声音复刻</span></div>
+      <div class="arrow">➜</div>
+      <div class="step"><div class="no">② 口型驱动</div><h5>数字人视频</h5><p>形象 + 音频 → 1080×1920 口播画面</p><span class="tag api">API / 二期自建 GPU</span></div>
+      <div class="arrow">➜</div>
+      <div class="step"><div class="no">③ 后期合成</div><h5>Remotion 模板</h5><p>逐字字幕 + 关键词高亮、BGM 自动压低、门店名 / 地址 / 电话贴片、片尾二维码、<b>AI 生成标识</b></p><span class="tag code">React 写视频</span></div>
+      <div class="arrow">➜</div>
+      <div class="step"><div class="no">④ 转码</div><h5>FFmpeg</h5><p>按抖音推荐参数编码、生成封面、上传 OSS</p><span class="tag code">Worker</span></div>
+      <div class="arrow">➜</div>
+      <div class="step"><div class="no">⑤ 分发</div><h5>发布 + 回收</h5><p>抖音 API 发布（POI / 话题）；视频号半自动；定时拉取效果数据，线索入库</p><span class="tag api">开放平台</span></div>
+    </div>
+  </section>
+
+  <!-- ================= 技术栈 ================= -->
+  <section id="stack">
+    <h2>技术栈一览</h2>
+    <p class="sub">选型原则：当前稳定 + 社区活跃 + AI 编码助手熟悉（AI 越熟悉，自动化开发成功率越高）。</p>
+    <div class="stack">
+      <div class="card"><h4 style="color:var(--c-client)">前端 · Web 后台</h4><div class="chips">
+        <span class="chip">React 19</span><span class="chip">Vite</span><span class="chip">TypeScript strict</span><span class="chip">TanStack Router / Query / Table</span><span class="chip">shadcn/ui</span><span class="chip">Tailwind v4</span><span class="chip">React Hook Form + Zod</span><span class="chip">ECharts</span><span class="chip">Zustand</span></div></div>
+      <div class="card"><h4 style="color:var(--c-client)">小程序 · App · POS</h4><div class="chips">
+        <span class="chip">Taro 4（微信 + 抖音）</span><span class="chip">Expo（RN 新架构）</span><span class="chip">Expo Router</span><span class="chip">NativeWind</span><span class="chip">expo-sqlite 离线收银</span><span class="chip">商米 SDK 原生桥接</span></div></div>
+      <div class="card"><h4 style="color:var(--c-biz)">后端 · Go</h4><div class="chips">
+        <span class="chip">Go 1.25+</span><span class="chip">Connect-RPC + buf</span><span class="chip">protovalidate</span><span class="chip">sqlc + pgx v5</span><span class="chip">Atlas 迁移</span><span class="chip">Wire / Fx</span><span class="chip">slog + OTel</span><span class="chip">testcontainers-go</span></div></div>
+      <div class="card"><h4 style="color:var(--c-ai)">AI / Agent</h4><div class="chips">
+        <span class="chip">CloudWeGo Eino</span><span class="chip">Eino ADK 多 Agent</span><span class="chip">MCP Go SDK</span><span class="chip">AG-UI（对话前端）</span><span class="chip">pgvector RAG</span><span class="chip">Langfuse / CozeLoop</span><span class="chip">豆包 · Qwen · DeepSeek</span></div></div>
+      <div class="card"><h4 style="color:var(--c-ai)">音视频</h4><div class="chips">
+        <span class="chip">数字人 API（火山 / 硅基等）</span><span class="chip">声音复刻 API</span><span class="chip">Remotion</span><span class="chip">FFmpeg</span><span class="chip">FunASR / SenseVoice</span><span class="chip">二期：LatentSync / MuseTalk / CosyVoice</span></div></div>
+      <div class="card"><h4 style="color:var(--c-flow)">编排 · 数据 · 运维</h4><div class="chips">
+        <span class="chip">Temporal</span><span class="chip">NATS JetStream</span><span class="chip">PostgreSQL 17 + RLS</span><span class="chip">Valkey</span><span class="chip">ClickHouse</span><span class="chip">OSS / TOS</span><span class="chip">K8s + Argo CD</span><span class="chip">Higress</span><span class="chip">Grafana LGTM</span></div></div>
+      <div class="card"><h4 style="color:var(--c-infra)">工程化 · AI 协作</h4><div class="chips">
+        <span class="chip">pnpm + Turborepo</span><span class="chip">AGENTS.md</span><span class="chip">.cursor/rules</span><span class="chip">规格驱动开发</span><span class="chip">Playwright E2E</span><span class="chip">golangci-lint</span><span class="chip">buf breaking</span></div></div>
+    </div>
+  </section>
+
+  <!-- ================= 开发路线 ================= -->
+  <section id="roadmap">
+    <h2>开发路线（20 周到公测）</h2>
+    <p class="sub">按前端 3~4 人、Go 2~3 人、AI 1~2 人、测试 1 人，并全程使用 AI 编码助手估算。</p>
+    <div class="gantt">
+      <div class="g-row g-head">
+        <div></div>
+        <div>W1</div><div>W2</div><div>W3</div><div>W4</div><div>W5</div><div>W6</div><div>W7</div><div>W8</div><div>W9</div><div>W10</div>
+        <div>W11</div><div>W12</div><div>W13</div><div>W14</div><div>W15</div><div>W16</div><div>W17</div><div>W18</div><div>W19</div><div>W20</div>
+      </div>
+      <div class="g-row"><div class="g-name">资质 / 备案 / 权限申请<small>关键路径，立即启动</small></div><div class="bar" style="grid-column: 2 / span 20; background: linear-gradient(90deg,#fb923c,#fb923c55);">支付入网 · 抖音权限 · 算法备案 · 软著 · 等保（并行推进）</div></div>
+      <div class="g-row"><div class="g-name">P0 底座</div><div class="bar" style="grid-column: 2 / span 2; background:#94a3b8;">工程骨架</div></div>
+      <div class="g-row"><div class="g-name">P1 门店经营 MVP<small>收银 · 库存 · 会员 · 行业包</small></div><div class="bar" style="grid-column: 4 / span 6; background:#34d399;">收银 / 支付 / 库存 / 餐饮 / 服装</div></div>
+      <div class="g-row"><div class="g-name">P1' 代理后台 MVP</div><div class="bar" style="grid-column: 6 / span 5; background:#a78bfa;">分级 · 归属 · 佣金 · 结算</div></div>
+      <div class="g-row"><div class="g-name">P2 AI Agent</div><div class="bar" style="grid-column: 8 / span 5; background:#f472b6;">MCP · 信号 · 选题 · 脚本 · 审核</div></div>
+      <div class="g-row"><div class="g-name">P3 数字人 + 渲染</div><div class="bar" style="grid-column: 11 / span 5; background:#e879f9;">克隆 · TTS · 口型 · Remotion</div></div>
+      <div class="g-row"><div class="g-name">P4 分发 + 线索</div><div class="bar" style="grid-column: 14 / span 5; background:#38bdf8;">抖音 · 视频号 · 线索 · One-ID</div></div>
+      <div class="g-row"><div class="g-name">P5 打磨 + 试点</div><div class="bar" style="grid-column: 18 / span 4; background:#fbbf24;">压测 · 安全 · 20 家种子商户</div></div>
+      <div class="milestone">
+        <b>◆ W2</b> 端到端 Hello 打通 &nbsp;&nbsp; <b>◆ W9</b> 真实门店可收银、可以招商 &nbsp;&nbsp; <b>◆ W12</b> 每日营销简报上线 &nbsp;&nbsp;
+        <b>◆ W15</b> 脚本一键成片 &nbsp;&nbsp; <b>◆ W18</b> 发布与线索闭环 &nbsp;&nbsp; <b>◆ W20</b> 公测
+      </div>
+    </div>
+    <div class="legend">
+      <span style="--c:#fb923c">资质</span><span style="--c:#94a3b8">底座</span><span style="--c:#34d399">门店经营</span><span style="--c:#a78bfa">代理</span>
+      <span style="--c:#f472b6">Agent</span><span style="--c:#e879f9">数字人</span><span style="--c:#38bdf8">分发</span><span style="--c:#fbbf24">上线</span>
+    </div>
+  </section>
+
+  <footer>店播AI · 架构图 v1.0 · 详细设计、数据模型、AI 自动化开发方式和准备清单见《开发文档.md》</footer>
+</div>
+</body>
+</html>

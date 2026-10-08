@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>naive-rag.mjs 代码分析</title>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: #131a2e;
+      --text: #e7ecff;
+      --muted: #a9b4d0;
+      --accent: #6ea8fe;
+      --ok: #3ddc97;
+      --warn: #ffcc66;
+      --danger: #ff7a90;
+      --border: #2a355a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: linear-gradient(160deg, #090e1b 0%, #0e1530 100%);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 28px 20px 40px;
+    }
+    h1, h2, h3 { margin: 0 0 12px; line-height: 1.3; }
+    h1 { font-size: 30px; }
+    h2 {
+      font-size: 22px;
+      margin-top: 28px;
+      border-left: 4px solid var(--accent);
+      padding-left: 10px;
+    }
+    p { margin: 0 0 10px; color: var(--muted); }
+    .panel {
+      background: rgba(19, 26, 46, 0.9);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      margin-top: 14px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 12px;
+    }
+    .card {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .card h3 { font-size: 17px; margin-bottom: 6px; }
+    .tag {
+      display: inline-block;
+      font-size: 12px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 3px 9px;
+      margin-right: 6px;
+      margin-top: 6px;
+      color: var(--muted);
+    }
+    .ok { color: var(--ok); }
+    .warn { color: var(--warn); }
+    .danger { color: var(--danger); }
+    code {
+      background: #1d2745;
+      padding: 2px 6px;
+      border-radius: 6px;
+      color: #cfe0ff;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 13px;
+    }
+    pre {
+      margin: 0;
+      padding: 12px;
+      overflow: auto;
+      background: #111938;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      color: #dbe6ff;
+      font-size: 13px;
+    }
+    ul { margin: 6px 0 0 18px; padding: 0; }
+    li { margin-bottom: 6px; color: var(--muted); }
+    .flow {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+    .node {
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #182141;
+      min-width: 140px;
+      text-align: center;
+      color: #d7e4ff;
+    }
+    .arrow { color: var(--accent); font-weight: bold; }
+    .footer {
+      margin-top: 26px;
+      color: #7f8bb0;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1><code>naive-rag.mjs</code> 代码分析报告</h1>
+    <p>该脚本实现了一个最小可运行的 LangGraph + Milvus 检索增强生成（RAG）流程，面向《天龙八部》问答场景。</p>
+
+    <h2>1) 整体架构</h2>
+    <div class="panel">
+      <div class="flow">
+        <div class="node">START</div>
+        <div class="arrow">→</div>
+        <div class="node">retrieve</div>
+        <div class="arrow">→</div>
+        <div class="node">generate</div>
+        <div class="arrow">→</div>
+        <div class="node">END</div>
+      </div>
+      <p style="margin-top: 12px;">
+        图中流程与代码中的 <code>StateGraph</code> 一致：先向量检索，再基于片段流式生成答案。
+      </p>
+    </div>
+
+    <h2>2) 核心模块拆解</h2>
+    <div class="grid">
+      <div class="card">
+        <h3>模型层</h3>
+        <ul>
+          <li><code>ChatOpenAI</code> 使用 <code>qwen-plus</code>。</li>
+          <li>从环境变量读取 <code>OPENAI_BASE_URL</code> 与 <code>OPENAI_API_KEY</code>。</li>
+          <li>在 <code>generateNode</code> 里通过 <code>model.stream()</code> 输出流式文本。</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>向量检索层</h3>
+        <ul>
+          <li><code>OpenAIEmbeddings</code> 维度设为 1024。</li>
+          <li>连接 Milvus 集合 <code>ebook_collection</code>。</li>
+          <li>检索函数 <code>similaritySearchWithScore(question, k)</code> 并格式化元数据。</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>图编排层</h3>
+        <ul>
+          <li>State: <code>question/k/documents/generation</code>。</li>
+          <li>节点: <code>retrieveNode</code> 与 <code>generateNode</code>。</li>
+          <li>调用: <code>graph.invoke()</code> 触发完整链路。</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>输出层</h3>
+        <ul>
+          <li>先打印 Mermaid 图（便于可视化流程）。</li>
+          <li>再打印检索片段（相似度、章节、内容摘要）。</li>
+          <li>最后输出流式生成结果。</li>
+        </ul>
+      </div>
+    </div>
+
+    <h2>3) 逐段代码释义（更详细）</h2>
+    <div class="panel">
+      <div class="card">
+        <h3>片段 A（L1-L4）导入依赖</h3>
+        <pre>import "dotenv/config";
+import { ChatOpenAI, OpenAIEmbeddings } from "@langchain/openai";
+import { Annotation, END, START, StateGraph } from "@langchain/langgraph";
+import { Milvus } from "@langchain/community/vectorstores/milvus";</pre>
+        <ul>
+          <li><b>含义：</b>加载环境变量、模型能力、图编排能力、Milvus 向量库适配器。</li>
+          <li><b>为什么这样写：</b>将“配置加载”和“业务能力”在入口一次性准备，后续逻辑更干净。</li>
+          <li><b>注意：</b><code>Milvus</code> 会间接依赖 <code>@zilliz/milvus2-sdk-node</code>。</li>
+        </ul>
+      </div>
+
+      <div class="card" style="margin-top: 12px;">
+        <h3>片段 B（L6-L14）常量与图状态定义</h3>
+        <pre>const COLLECTION_NAME = "ebook_collection";
+const TOP_K = 5;
+
+const GraphState = Annotation.Root({
+  question: Annotation,
+  k: Annotation,
+  documents: Annotation,
+  generation: Annotation,
+});</pre>
+        <ul>
+          <li><b>含义：</b>固定集合名与默认召回条数，并声明图节点间传递的数据结构。</li>
+          <li><b>输入输出：</b>这里本身无运行时输入，属于“全局配置与 schema”。</li>
+          <li><b>价值：</b>让 <code>retrieve</code> 与 <code>generate</code> 通过统一 state 通信。</li>
+        </ul>
+      </div>
+
+      <div class="card" style="margin-top: 12px;">
+        <h3>片段 C（L16-L30）模型与嵌入初始化</h3>
+        <pre>const model = new ChatOpenAI({ ... });
+const embeddings = new OpenAIEmbeddings({ ... });
+let vectorStore;</pre>
+        <ul>
+          <li><b>含义：</b>准备对话模型、Embedding 模型，并预留向量库实例变量。</li>
+          <li><b>输入：</b><code>OPENAI_BASE_URL</code>、<code>OPENAI_API_KEY</code> 环境变量。</li>
+          <li><b>副作用：</b>若环境变量缺失，后续请求模型时会失败。</li>
+        </ul>
+      </div>
+
+      <div class="card" style="margin-top: 12px;">
+        <h3>片段 D（L32-L50）检索函数 retrieveRelevantContent</h3>
+        <pre>async function retrieveRelevantContent(question, k = TOP_K) {
+  const docsWithScores = await vectorStore.similaritySearchWithScore(question, k);
+  return docsWithScores.map(([doc, score]) => ({ ... }));
+}</pre>
+        <ul>
+          <li><b>含义：</b>把“用户问题”变成向量检索请求，返回结构化片段列表。</li>
+          <li><b>输入：</b><code>question</code>（问题）、<code>k</code>（召回数）。</li>
+          <li><b>输出：</b>数组，每项包含 <code>score/content/book_id/chapter_num/index</code>。</li>
+          <li><b>容错：</b>异常时打印错误并返回空数组，避免图执行直接中断。</li>
+        </ul>
+      </div>
+
+      <div class="card" style="margin-top: 12px;">
+        <h3>片段 E（L52-L61）图节点 retrieveNode</h3>
+        <pre>const retrieveNode = async (state) => {
+  console.log(state, "state");
+  const documents = await retrieveRelevantContent(state.question, state.k);
+  return { question: state.question, k: state.k, documents };
+};</pre>
+        <ul>
+          <li><b>含义：</b>这是图中的“检索节点”，读取 state 并补全 <code>documents</code>。</li>
+          <li><b>输入：</b>state 的 <code>question</code> 和 <code>k</code>。</li>
+          <li><b>输出：</b>新的 state（含检索结果）。</li>
+          <li><b>备注：</b><code>console.log(state)</code> 是调试输出，可在稳定后去掉。</li>
+        </ul>
+      </div>
+
+      <div class="card" style="margin-top: 12px;">
+        <h3>片段 F（L63-L105）图节点 generateNode</h3>
+        <pre>const context = state.documents.map(...).join(...);
+const prompt = `...${context}...${state.question}...`;
+const stream = await model.stream(prompt);
+for await (const chunk of stream) { ... }</pre>
+        <ul>
+          <li><b>含义：</b>把检索片段拼成上下文，构造提示词，流式调用模型生成回答。</li>
+          <li><b>输入：</b><code>documents</code> 与 <code>question</code>。</li>
+          <li><b>输出：</b><code>generation</code>（完整回答文本）。</li>
+          <li><b>副作用：</b>实时向控制台写流式 token（用户能边生成边看到结果）。</li>
+        </ul>
+      </div>
+
+      <div class="card" style="margin-top: 12px;">
+        <h3>片段 G（L107-L113）图编排定义</h3>
+        <pre>const graph = new StateGraph(GraphState)
+  .addNode("retrieve", retrieveNode)
+  .addNode("generate", generateNode)
+  .addEdge(START, "retrieve")
+  .addEdge("retrieve", "generate")
+  .addEdge("generate", END)
+  .compile();</pre>
+        <ul>
+          <li><b>含义：</b>声明固定执行路径：开始 → 检索 → 生成 → 结束。</li>
+          <li><b>价值：</b>流程清晰，后续易扩展（如插入 rerank 节点）。</li>
+        </ul>
+      </div>
+
+      <div class="card" style="margin-top: 12px;">
+        <h3>片段 H（L115-L153）main 前半：连接与加载 Milvus</h3>
+        <pre>vectorStore = await Milvus.fromExistingCollection(embeddings, { ... });
+vectorStore.indexSearchParams = { ... };
+await vectorStore.client.loadCollection({ collection_name: COLLECTION_NAME });</pre>
+        <ul>
+          <li><b>含义：</b>连接已有集合，配置检索参数，并确保集合被加载到内存。</li>
+          <li><b>输入：</b>集合名、Milvus 地址、向量字段配置、索引参数。</li>
+          <li><b>容错：</b>若已加载，捕获 <code>already loaded</code> 并继续执行。</li>
+        </ul>
+      </div>
+
+      <div class="card" style="margin-top: 12px;">
+        <h3>片段 I（L155-L187）main 后半：执行图并打印结果</h3>
+        <pre>const result = await graph.invoke({ question, k, documents: [], generation: "" });
+if (result.documents.length === 0) { ... } else { ... }
+if (!result.generation) { ... }</pre>
+        <ul>
+          <li><b>含义：</b>真正触发 RAG 流程，并把检索命中与最终答案输出到控制台。</li>
+          <li><b>输入：</b>初始 state（问题 + 空 documents + 空 generation）。</li>
+          <li><b>输出：</b>控制台可读结果；函数本身不写文件。</li>
+          <li><b>兜底：</b>无检索命中和模型空输出都给出可读提示。</li>
+        </ul>
+      </div>
+    </div>
+
+    <h2>4) 运行时链路</h2>
+    <div class="panel">
+      <ol style="margin: 0 0 0 18px; color: var(--muted);">
+        <li>初始化 LLM 与 Embeddings。</li>
+        <li>连接 Milvus 并尝试 <code>loadCollection</code>。</li>
+        <li>图执行进入 <code>retrieve</code>：按问题向量检索 top-k 片段。</li>
+        <li>图执行进入 <code>generate</code>：拼接上下文 Prompt 并流式生成。</li>
+        <li>控制台输出检索结果与最终回答。</li>
+      </ol>
+    </div>
+
+    <h2>5) 代码亮点</h2>
+    <div class="panel">
+      <span class="tag ok">流式输出</span>
+      <span class="tag ok">图结构清晰</span>
+      <span class="tag ok">检索结果可观测</span>
+      <span class="tag ok">Milvus 加载兜底</span>
+      <ul>
+        <li>检索与生成解耦，便于后续插入重排、过滤、缓存节点。</li>
+        <li>输出中包含 metadata，可定位知识片段来源。</li>
+      </ul>
+    </div>
+
+    <h2>6) 风险与改进建议</h2>
+    <div class="panel">
+      <div class="grid">
+        <div class="card">
+          <h3 class="danger">依赖风险</h3>
+          <ul>
+            <li><code>@langchain/community/vectorstores/milvus</code> 依赖底层 SDK。</li>
+            <li>若缺失 <code>@zilliz/milvus2-sdk-node</code> 会报 <code>ERR_MODULE_NOT_FOUND</code>。</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3 class="warn">可配置性</h3>
+          <ul>
+            <li><code>question</code> 和 <code>kArg</code> 目前写死，建议改为 CLI 参数。</li>
+            <li><code>Milvus URL</code> 建议改为环境变量。</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3 class="warn">健壮性</h3>
+          <ul>
+            <li>可在启动时校验关键环境变量，提前失败并给出提示。</li>
+            <li>建议为 <code>vectorStore</code> 未初始化场景添加保护。</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3 class="warn">检索质量</h3>
+          <ul>
+            <li>可增加重排（rerank）和 chunk 邻域拼接。</li>
+            <li>可按章节或书籍 ID 做 metadata 过滤以减少噪音。</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <h2>7) 关键代码片段（摘要）</h2>
+    <div class="panel">
+      <pre>const graph = new StateGraph(GraphState)
+  .addNode("retrieve", retrieveNode)
+  .addNode("generate", generateNode)
+  .addEdge(START, "retrieve")
+  .addEdge("retrieve", "generate")
+  .addEdge("generate", END)
+  .compile();</pre>
+    </div>
+
+    <div class="footer">
+      生成时间：本地静态分析视图。可直接双击打开该 HTML 文件查看。
+    </div>
+  </div>
+</body>
+</html>
